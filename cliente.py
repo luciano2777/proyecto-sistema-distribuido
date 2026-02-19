@@ -4,7 +4,7 @@ import threading
 HOST = '127.0.0.1'
 PORT = 5000
 
-def escuchar_servidor(conn):
+def escuchar_servidor(conn): #Jjfdskafjalkfjflkajfkla
     try: #jfaosfoajfhkjafhkj
         while True:
             data = conn.recv(1024)
