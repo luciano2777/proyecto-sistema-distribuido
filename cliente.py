@@ -5,7 +5,7 @@ HOST = '127.0.0.1'
 PORT = 5000
 
 def escuchar_servidor(conn):
-    try:
+    try: #jfaosfoajfhkjafhkj
         while True:
             data = conn.recv(1024)
             if not data: break
