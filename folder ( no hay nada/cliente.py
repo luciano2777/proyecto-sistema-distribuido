@@ -54,39 +54,44 @@ def escuchar_servidor(conn):
             data = conn.recv(65536)
             if not data: break
             
-            mensaje_decodificado = data.decode('utf-8')
+            # Split the incoming stream by newline
+            mensajes = data.decode('utf-8').split('\n')
             
-            # Check if the message is a JSON dictionary
-            try:
-                datos_dict = json.loads(mensaje_decodificado)
-                contenido = datos_dict.get("text", "")
-
-                if isinstance(contenido, list):
-                    # It's a list of paragraphs!
-                    resultado_final = tokenizar_lista(contenido, datos_dict.get("id", ""))
-                else:
-                    # It's just a single string
-                    resultado_final = tokenizar(contenido, datos_dict.get("id", ""))
-                print(f"Tokens: {resultado_final.get("tokens")}")        # ['en', 'un', 'lugar', 'de', 'la']
-                print(f"Longitudes: {resultado_final.get("longitudes")}")   # [2, 2, 5, 2, 2]
-                print(f"Notas MIDI: {resultado_final.get("notas_midi")}")
-                # Send the single consolidated dictionary back
-                conn.sendall(json.dumps(resultado_final).encode('utf-8'))
-
+            for mensaje_decodificado in mensajes:
+                if not mensaje_decodificado.strip():
+                    continue # Skip empty lines
                 
-            except json.JSONDecodeError:
-                # If it's not JSON, handle it as a normal message
-                print(f"\r{mensaje_decodificado}\nYou: ", end="", flush=True)
+                # Check if the message is a JSON dictionary
+                try:
+                    datos_dict = json.loads(mensaje_decodificado)
+                    contenido = datos_dict.get("text", "")
 
-                # Mantain your ACK logic for regular chat messages
-                if mensaje_decodificado.startswith("[") and "]: " in mensaje_decodificado:
-                    try:
-                        remitente = mensaje_decodificado.split("]:")[0][1:]
-                        conn.sendall(f"__ACK__ {remitente}".encode('utf-8'))
-                    except:
-                        pass
-    except:
-        print("\n[ERROR] Conexión perdida.")
+                    if isinstance(contenido, list):
+                        resultado_final = tokenizar_lista(contenido, datos_dict.get("id", ""))
+                    else:
+                        resultado_final = tokenizar(contenido, datos_dict.get("id", ""))
+                        
+                    print(f"Tokens: {resultado_final.get('tokens')}")        
+                    print(f"Longitudes: {resultado_final.get('longitudes')}")   
+                    print(f"Notas MIDI: {resultado_final.get('notas_midi')}")
+                    
+                    # Send the single consolidated dictionary back
+                    respuesta = json.dumps(resultado_final) + "\n"
+                    conn.sendall(respuesta.encode('utf-8'))
+                    
+                except json.JSONDecodeError:
+                    # If it's not JSON, handle it as a normal chat message
+                    print(f"\r{mensaje_decodificado}\nYou: ", end="", flush=True)
+
+                    # Maintain your ACK logic for regular chat messages
+                    if mensaje_decodificado.startswith("[") and "]: " in mensaje_decodificado:
+                        try:
+                            remitente = mensaje_decodificado.split("]:")[0][1:]
+                            conn.sendall(f"__ACK__ {remitente}\n".encode('utf-8'))
+                        except:
+                            pass
+    except Exception as e:
+        print(f"\n[ERROR] Conexión perdida: {e}")
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     try:

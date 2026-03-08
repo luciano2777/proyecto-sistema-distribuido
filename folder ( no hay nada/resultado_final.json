@@ -1,0 +1,44 @@
+{
+    "tokens_totales": [
+        "aaaaaa",
+        "akf\u00f1afk",
+        "fjaklfjaljkf",
+        "bbbb",
+        "pioroqiewr",
+        "jaflfjaoip",
+        "ccc",
+        "dddd",
+        "ffff",
+        "oipewq3128498",
+        "4108u0fu8e",
+        "gggg"
+    ],
+    "longitud_tokens": [
+        6,
+        7,
+        12,
+        4,
+        10,
+        10,
+        3,
+        4,
+        4,
+        13,
+        10,
+        4
+    ],
+    "notas_midi_totales": [
+        0,
+        21,
+        127,
+        0,
+        127,
+        127,
+        63,
+        63,
+        0,
+        127,
+        84,
+        63
+    ]
+}

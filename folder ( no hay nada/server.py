@@ -2,6 +2,7 @@ import socket
 import threading
 import json
 import psutil
+from convertmusic import * 
 HOST = '127.0.0.1'
 PORT = 5000
 resultados_globales = []
@@ -96,14 +97,14 @@ def cmd_broadcast(conn, nombre_actual, lista_dictionary):
                 conteo += 1
                 
                 dict_data = lista_dictionary[conteo -1]
-                mensaje_json = json.dumps(dict_data).encode('utf-8')
-                
+                # Inside cmd_broadcast
+                mensaje_json = (json.dumps(dict_data) + "\n").encode('utf-8') # Added \n
                 cliente_socket.sendall(mensaje_json)
                 
             except Exception as e:
                 print(f"Error enviando a {nombre}: {e}")
     
-    conn.sendall(b"[INFO] Mensaje enviado a todos.")
+    conn.sendall(b"[INFO] Mensaje enviado a todos. \n")
     
 def parragraph_into_dictlist(path, clients):
     # 'list' contains all paragraphs in order
@@ -158,10 +159,12 @@ def esperar_y_reensamblar(conn_solicitante):
         # Consolidar los datos de todos los clientes
         final_data = {
             "tokens_totales": [],
+            "longitud_tokens": [],
             "notas_midi_totales": []
         }
         for res in resultados_globales:
             final_data["tokens_totales"].extend(res.get("tokens", []))
+            final_data["longitud_tokens"].extend(res.get("longitudes", []))
             final_data["notas_midi_totales"].extend(res.get("notas_midi", []))
             
         # Guardar el resultado en un archivo físico
@@ -180,52 +183,105 @@ def manejar_cliente(conn, addr):
         while True:
             data = conn.recv(65536)
             if not data: break
-            mensaje = data.decode('utf-8').strip()
-            if mensaje.startswith('{') and '"tokens"' in mensaje:
-                try:
-                    resultado = json.loads(mensaje)
-                    resultados_globales.append(resultado)
-                    print(f"[SISTEMA] Recibido fragmento ID: {resultado.get('id')} de {nombre_actual}")
-                    
-                    # Si ya tenemos todos, avisamos al hilo principal
-                    if len(resultados_globales) == total_esperado:
-                        evento_completado.set()
-                    continue # Saltamos el resto del procesamiento de comandos
-                except json.JSONDecodeError:
-                    pass
-
-            if mensaje.startswith("/register"):
-                nombre_actual = cmd_register(conn, mensaje, nombre_actual)
-
-            elif mensaje == "/list":
-                cmd_list(conn)
-
-            elif mensaje.startswith("/send"):
-                cmd_send(conn, mensaje, nombre_actual)
-            elif mensaje == "/broadcast":
-                
-                
-                #Poner el comando que rompe cada texto en un diccionario con respectivas IDs, y los añada a una lista
-                contenido = "/home/luciano/Desktop/Universidad/12 trimesre/sistema distribuido/Proyecto/branchLuciano/test.txt" # mensaje.split(maxsplit=2)[2]
-                lista_dictionary = parragraph_into_dictlist(contenido, usuarios)
-                
-                total_esperado = len(lista_dictionary)
-                #limpiar los datos de sesiones anteriores
-                resultados_globales.clear()
-                evento_completado.clear()
-                print(lista_dictionary)
-                #hacer que mande cada elemento de la lista a los clientes
-                cmd_broadcast(conn, nombre_actual, lista_dictionary)
-                #una vez sea mandado a los clientes, esperar a que termine de trabajar, para que lo mande devuelta.
-                #se recibirá el archivo como un diccionario, el cual será añadido una lista, tras añadir todos los archivos
-                #se reordenará de mayor a menor en base a id, y luego será ensamblando en un solo archivo.
-                # recibir el archivo, reensamblarlo y hacerlo un archivo json.
-                threading.Thread(target=esperar_y_reensamblar, args=(conn,), daemon=True).start()
-            elif mensaje.startswith("__ACK__"):
-                cmd_ack(mensaje, nombre_actual)
-
             
+            # Split by newline on the server side too
+            mensajes = data.decode('utf-8').split('\n')
+            
+            for mensaje in mensajes:
+                mensaje = mensaje.strip()
+                if not mensaje: 
+                    continue
+                
+                if mensaje.startswith('{') and '"tokens"' in mensaje:
+                    try:
+                        resultado = json.loads(mensaje)
+                        resultados_globales.append(resultado)
+                        print(f"[SISTEMA] Recibido fragmento ID: {resultado.get('id')} de {nombre_actual}")
+                        
+                        # Si ya tenemos todos, avisamos al hilo principal
+                        if len(resultados_globales) == total_esperado:
+                            evento_completado.set()
+                        continue # Pasamos al siguiente mensaje en el bucle
+                    except json.JSONDecodeError:
+                        pass
 
+                if mensaje.startswith("/register"):
+                    nombre_actual = cmd_register(conn, mensaje, nombre_actual)
+
+                elif mensaje == "/list":
+                    cmd_list(conn)
+
+                elif mensaje.startswith("/send"):
+                    cmd_send(conn, mensaje, nombre_actual)
+                    
+                elif mensaje.startswith("/sonar"):
+                    # Dividir el mensaje en comando y ruta (maxsplit=1 para no romper rutas con espacios)
+                    partes = mensaje.split(maxsplit=1)
+                    
+                    if len(partes) < 2:
+                        conn.sendall(b"[SERVER] Uso: /sonar <ruta_absoluta_del_archivo>\n")
+                        continue
+                        
+                    # Extraer la ruta ingresada por el usuario
+                    contenido = partes[1].strip()
+                    
+                    try:
+                        # Intentar leer el archivo y hacerlo sonar
+                        lista_de_notas = convertir_a_mensajes_midi(contenido)
+    
+                        # Paso 2: Ejecución auditiva (Sonorización)
+                        reproducir_sonorizacion(lista_de_notas)
+                        pass
+                        
+                    except FileNotFoundError:
+                        # Evitar que el servidor colapse si el usuario escribe mal la ruta
+                        mensaje_error = f"[SERVER] Error: No se encontro el archivo en la ruta '{contenido}'.\n"
+                        conn.sendall(mensaje_error.encode('utf-8'))
+                    except Exception as e:
+                        mensaje_error = f"[SERVER] Error inesperado al procesar el archivo: {e}\n"
+                        conn.sendall(mensaje_error.encode('utf-8'))
+
+                elif mensaje.startswith("/broadcast"):
+                    # Dividir el mensaje en comando y ruta (maxsplit=1 para no romper rutas con espacios)
+                    partes = mensaje.split(maxsplit=1)
+                    
+                    if len(partes) < 2:
+                        conn.sendall(b"[SERVER] Uso: /broadcast <ruta_absoluta_del_archivo>\n")
+                        continue
+                        
+                    # Extraer la ruta ingresada por el usuario
+                    contenido = partes[1].strip()
+                    
+                    try:
+                        # Intentar leer el archivo y repartirlo
+                        lista_dictionary = parragraph_into_dictlist(contenido, usuarios)
+                        
+                        total_esperado = len(lista_dictionary)
+                        
+                        # Evitar lanzar el proceso si no hay clientes o el archivo está vacío
+                        if total_esperado == 0:
+                            conn.sendall(b"[SERVER] Error: Archivo vacio o no hay clientes conectados.\n")
+                            continue
+
+                        # Limpiar los datos de sesiones anteriores
+                        resultados_globales.clear()
+                        evento_completado.clear()
+                        print(f"[SISTEMA] Preparando broadcast para archivo: {contenido}")
+                        
+                        cmd_broadcast(conn, nombre_actual, lista_dictionary)
+                        threading.Thread(target=esperar_y_reensamblar, args=(conn,), daemon=True).start()
+                        
+                    except FileNotFoundError:
+                        # Evitar que el servidor colapse si el usuario escribe mal la ruta
+                        mensaje_error = f"[SERVER] Error: No se encontro el archivo en la ruta '{contenido}'.\n"
+                        conn.sendall(mensaje_error.encode('utf-8'))
+                    except Exception as e:
+                        mensaje_error = f"[SERVER] Error inesperado al procesar el archivo: {e}\n"
+                        conn.sendall(mensaje_error.encode('utf-8'))
+                    
+                elif mensaje.startswith("__ACK__"):
+                    cmd_ack(mensaje, nombre_actual)
+                    
     except Exception as e:
         print(f"Error con {addr}: {e}")
     finally:
