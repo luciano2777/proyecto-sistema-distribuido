@@ -16,9 +16,9 @@ def convertir_a_mensajes_midi(ruta_json):
         mensajes_midi = []
         
         for valor in notas_crudas:
-            # Aseguramos que el valor esté en el rango [0, 127] según la normalización [cite: 18]
+            # Se asegura que el valor esté en el rango [0, 127] según la normalización [cite: 18]
             nota = max(0, min(127, int(valor)))
-            # Creamos un mensaje de 'nota encendida' (note_on)
+            #  un mensaje de 'nota encendida' (note_on)
             mensajes_midi.append(mido.Message('note_on', note=nota, velocity=64))
             
         return mensajes_midi
