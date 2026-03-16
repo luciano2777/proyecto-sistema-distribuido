@@ -57,7 +57,7 @@ def reproducir_sonorizacion(mensajes_midi):
 
 # Ejecución principal
 if __name__ == "__main__":
-    archivo = '/home/luciano/Desktop/Universidad/12 trimesre/sistema distribuido/Proyecto/branchluciano2/folder/resultado_final.json'
+    archivo = "resultado_final.json"
     
     # Paso 1: Procesamiento de datos (Conversión)
     lista_de_notas = convertir_a_mensajes_midi(archivo)
